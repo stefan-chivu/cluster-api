@@ -177,6 +177,7 @@ func (r *Reconciler) reconcileBootstrap(ctx context.Context, s *scope) (ctrl.Res
 	}
 
 	// Call generic external reconciler if we have an external reference.
+	// TODO: debug here
 	externalResult, err := r.reconcileExternal(ctx, cluster, m, m.Spec.Bootstrap.ConfigRef)
 	if err != nil {
 		return ctrl.Result{}, err

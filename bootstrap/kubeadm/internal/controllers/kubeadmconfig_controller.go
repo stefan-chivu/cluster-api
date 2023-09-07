@@ -246,9 +246,11 @@ func (r *KubeadmConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 func (r *KubeadmConfigReconciler) reconcile(ctx context.Context, scope *Scope, cluster *clusterv1.Cluster, config *bootstrapv1.KubeadmConfig, configOwner *bsutil.ConfigOwner) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
+	log.Info("DEBUG: reconcile triggered", "Cluster: ", cluster.Spec.ControlPlaneRef)
 
 	// Ensure the bootstrap secret associated with this KubeadmConfig has the correct ownerReference.
 	if err := r.ensureBootstrapSecretOwnersRef(ctx, scope); err != nil {
+		log.Info("DEBUG: ensureBootstrapSecretOwnersRef failed: ", "Error: ", err)
 		return ctrl.Result{}, err
 	}
 	switch {
@@ -261,11 +263,14 @@ func (r *KubeadmConfigReconciler) reconcile(ctx context.Context, scope *Scope, c
 	// This case solves the pivoting scenario (or a backup restore) which doesn't preserve the status subresource on objects.
 	case configOwner.DataSecretName() != nil && (!config.Status.Ready || config.Status.DataSecretName == nil):
 		config.Status.Ready = true
+		log.Info("DEBUG: Setting cluster DataSecret name.", "configOwner", configOwner)
+		log.Info("DEBUG: configOwner.DataSecretName()", "value: ", configOwner.DataSecretName())
 		config.Status.DataSecretName = configOwner.DataSecretName()
 		conditions.MarkTrue(config, bootstrapv1.DataSecretAvailableCondition)
 		return ctrl.Result{}, nil
 	// Status is ready means a config has been generated.
 	case config.Status.Ready:
+		log.Info("DEBUG: entered case config.Status.Ready");
 		if config.Spec.JoinConfiguration != nil && config.Spec.JoinConfiguration.Discovery.BootstrapToken != nil {
 			if !configOwner.HasNodeRefs() {
 				// If the BootstrapToken has been generated for a join but the config owner has no nodeRefs,
@@ -285,6 +290,7 @@ func (r *KubeadmConfigReconciler) reconcile(ctx context.Context, scope *Scope, c
 
 	// Note: can't use IsFalse here because we need to handle the absence of the condition as well as false.
 	if !conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
+		log.Info("DEBUG: handleClusterNotInitialized called");
 		return r.handleClusterNotInitialized(ctx, scope)
 	}
 
@@ -359,15 +365,18 @@ func (r *KubeadmConfigReconciler) rotateMachinePoolBootstrapToken(ctx context.Co
 }
 
 func (r *KubeadmConfigReconciler) handleClusterNotInitialized(ctx context.Context, scope *Scope) (_ ctrl.Result, reterr error) {
+	scope.Info("DEBUG: handleClusterNotInitialized entered")
 	// initialize the DataSecretAvailableCondition if missing.
 	// this is required in order to avoid the condition's LastTransitionTime to flicker in case of errors surfacing
 	// using the DataSecretGeneratedFailedReason
 	if conditions.GetReason(scope.Config, bootstrapv1.DataSecretAvailableCondition) != bootstrapv1.DataSecretGenerationFailedReason {
 		conditions.MarkFalse(scope.Config, bootstrapv1.DataSecretAvailableCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
+		scope.Info("DEBUG: DataSecretAvailableCondition != DataSecretGenerationFailedReason")
 	}
 
 	// if it's NOT a control plane machine, requeue
 	if !scope.ConfigOwner.IsControlPlaneMachine() {
+		scope.Info("Debug: configOwner is not a control plane machine. requeuing")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -1012,7 +1021,7 @@ func (r *KubeadmConfigReconciler) reconcileTopLevelObjectSettings(ctx context.Co
 // sets the reference in the configuration status and ready to true.
 func (r *KubeadmConfigReconciler) storeBootstrapData(ctx context.Context, scope *Scope, data []byte) error {
 	log := ctrl.LoggerFrom(ctx)
-
+	log.Info("DEBUG: storeBootstrapData called")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scope.Config.Name,
@@ -1048,6 +1057,7 @@ func (r *KubeadmConfigReconciler) storeBootstrapData(ctx context.Context, scope 
 			return errors.Wrapf(err, "failed to update bootstrap data secret for KubeadmConfig %s/%s", scope.Config.Namespace, scope.Config.Name)
 		}
 	}
+	// TODO: add more log messages here
 	scope.Config.Status.DataSecretName = pointer.String(secret.Name)
 	scope.Config.Status.Ready = true
 	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
