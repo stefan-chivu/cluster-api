@@ -50,8 +50,10 @@ import (
 func (r *KubeadmControlPlaneReconciler) reconcileKubeconfig(ctx context.Context, controlPlane *internal.ControlPlane) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
+	log.Info("DEBUG: reconcileKubeconfig called")
 	endpoint := controlPlane.Cluster.Spec.ControlPlaneEndpoint
 	if endpoint.IsZero() {
+		log.Info("DEBUG: endpoint IsZero")
 		return ctrl.Result{}, nil
 	}
 
@@ -60,6 +62,7 @@ func (r *KubeadmControlPlaneReconciler) reconcileKubeconfig(ctx context.Context,
 	configSecret, err := secret.GetFromNamespacedName(ctx, r.SecretCachingClient, clusterName, secret.Kubeconfig)
 	switch {
 	case apierrors.IsNotFound(err):
+		log.Info("DEBUG: case apierrors.IsNotFound(err)")
 		createErr := kubeconfig.CreateSecretWithOwner(
 			ctx,
 			r.SecretCachingClient,
@@ -68,25 +71,30 @@ func (r *KubeadmControlPlaneReconciler) reconcileKubeconfig(ctx context.Context,
 			controllerOwnerRef,
 		)
 		if errors.Is(createErr, kubeconfig.ErrDependentCertificateNotFound) {
+			log.Info("DEBUG: createErr == ErrDependentCertificateNotFound", "createErr:", createErr)
 			return ctrl.Result{RequeueAfter: dependentCertRequeueAfter}, nil
 		}
 		// always return if we have just created in order to skip rotation checks
 		return ctrl.Result{}, createErr
 	case err != nil:
+		log.Info("DEBUG: failed to retrieve kubeconfig secret.", "err:", err)
 		return ctrl.Result{}, errors.Wrap(err, "failed to retrieve kubeconfig Secret")
 	}
 
 	if err := r.adoptKubeconfigSecret(ctx, configSecret, controlPlane.KCP); err != nil {
+		log.Info("DEBUG: adoptKubeconfigSecret failed.", "err:", err)
 		return ctrl.Result{}, err
 	}
 
 	// only do rotation on owned secrets
 	if !util.IsControlledBy(configSecret, controlPlane.KCP) {
+		log.Info("DEBUG: controlPlane configSecret is not owned.")
 		return ctrl.Result{}, nil
 	}
 
 	needsRotation, err := kubeconfig.NeedsClientCertRotation(configSecret, certs.ClientCertificateRenewalDuration)
 	if err != nil {
+		log.Info("DEBUG: NeedsClientCertRotation failed.")
 		return ctrl.Result{}, err
 	}
 
