@@ -280,7 +280,10 @@ func (r *Reconciler) reconcileControlPlane(ctx context.Context, cluster *cluster
 func (r *Reconciler) reconcileKubeconfig(ctx context.Context, cluster *clusterv1.Cluster) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
+	log.Info("reconcileKubeconfig entered")
+
 	if !cluster.Spec.ControlPlaneEndpoint.IsValid() {
+		log.Info("!cluster.Spec.ControlPlaneEndpoint.IsValid() true")
 		return ctrl.Result{}, nil
 	}
 
@@ -288,6 +291,7 @@ func (r *Reconciler) reconcileKubeconfig(ctx context.Context, cluster *clusterv1
 	// responsible for the management of the Kubeconfig. We continue to manage it here only for backward
 	// compatibility when a Control Plane provider is not in use.
 	if cluster.Spec.ControlPlaneRef != nil {
+		log.Info("there is a ControlPlaneRef, the Control Plane provider is responsible for the management", "cluster.Spec.ControlPlaneRef: ", cluster.Spec.ControlPlaneRef)
 		return ctrl.Result{}, nil
 	}
 
@@ -295,6 +299,7 @@ func (r *Reconciler) reconcileKubeconfig(ctx context.Context, cluster *clusterv1
 	switch {
 	case apierrors.IsNotFound(err):
 		if err := kubeconfig.CreateSecret(ctx, r.Client, cluster); err != nil {
+			log.Info("kubeconfig CreateSecret failed", "err", err)
 			if err == kubeconfig.ErrDependentCertificateNotFound {
 				log.Info("Could not find secret for cluster, requeuing", "Secret", secret.ClusterCA)
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -302,6 +307,7 @@ func (r *Reconciler) reconcileKubeconfig(ctx context.Context, cluster *clusterv1
 			return ctrl.Result{}, err
 		}
 	case err != nil:
+		log.Info("secret.Get returned an error", "err", err)
 		return ctrl.Result{}, errors.Wrapf(err, "failed to retrieve Kubeconfig Secret for Cluster %q in namespace %q", cluster.Name, cluster.Namespace)
 	}
 

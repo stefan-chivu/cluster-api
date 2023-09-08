@@ -112,6 +112,7 @@ func CreateSecretWithOwner(ctx context.Context, c client.Client, clusterName cli
 	server := fmt.Sprintf("https://%s", endpoint)
 	out, err := generateKubeconfig(ctx, c, clusterName, server)
 	if err != nil {
+		// TODO: debug here
 		return err
 	}
 
