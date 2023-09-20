@@ -112,7 +112,6 @@ func CreateSecretWithOwner(ctx context.Context, c client.Client, clusterName cli
 	server := fmt.Sprintf("https://%s", endpoint)
 	out, err := generateKubeconfig(ctx, c, clusterName, server)
 	if err != nil {
-		// TODO: debug here
 		return err
 	}
 
@@ -205,6 +204,7 @@ func RegenerateSecret(ctx context.Context, c client.Client, configSecret *corev1
 func generateKubeconfig(ctx context.Context, c client.Client, clusterName client.ObjectKey, endpoint string) ([]byte, error) {
 	clusterCA, err := secret.GetFromNamespacedName(ctx, c, clusterName, secret.ClusterCA)
 	if err != nil {
+		return nil, errors.Wrapf(err, "secret.GetFromNamespacedName failed. clusterName: [ %v ]; clusterName.Namespace: [ %v ]; clusterCA: [ %v ]", clusterName, clusterName.Namespace, secret.ClusterCA)
 		if apierrors.IsNotFound(err) {
 			return nil, ErrDependentCertificateNotFound
 		}

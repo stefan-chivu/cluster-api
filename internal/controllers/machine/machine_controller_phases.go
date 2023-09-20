@@ -275,6 +275,7 @@ func (r *Reconciler) reconcileInfrastructure(ctx context.Context, s *scope) (ctr
 	// Determine if the infrastructure provider is ready.
 	ready, err := external.IsReady(infraConfig)
 	if err != nil {
+		log.Info("External infrastructure provider ready check returned error: ", "err", err)
 		return ctrl.Result{}, err
 	}
 	if ready && !m.Status.InfrastructureReady {
